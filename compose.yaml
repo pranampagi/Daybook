@@ -1,0 +1,97 @@
+x-api: &api-common
+  build: ./backend
+  image: daybook-api:local
+  environment:
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-daybook}:${POSTGRES_PASSWORD:?Run bash scripts/setup.sh first}@db:5432/${POSTGRES_DB:-daybook}
+    JWT_SECRET: ${JWT_SECRET:?Run bash scripts/setup.sh first}
+    APP_ENV: ${APP_ENV:-development}
+    COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-["http://localhost:8080","http://localhost:5173"]}
+    ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+    DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+    DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+  networks:
+    - backend
+    - frontend
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-daybook}
+      POSTGRES_USER: ${POSTGRES_USER:-daybook}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run bash scripts/setup.sh first}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  migrate:
+    <<: *api-common
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *api-common
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    build: ./frontend
+    image: daybook-web:local
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - frontend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+
+networks:
+  frontend:
+  backend:
+    internal: true

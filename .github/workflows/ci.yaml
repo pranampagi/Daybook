@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.21"
+          python-version: "3.13"
+      - run: uv sync --frozen
+        working-directory: backend
+      - run: uv run ruff check . && uv run ruff format --check . && uv run pytest
+        working-directory: backend
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: frontend
+      - run: npm test && npm run build
+        working-directory: frontend
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/setup.sh
+      - run: docker compose up --build --wait --wait-timeout 180
+      - run: curl --fail http://localhost:8080/api/ready && curl --fail http://localhost:8080/healthz
+      - run: python3 scripts/smoke.py
+      - if: always()
+        run: docker compose logs && docker compose down
