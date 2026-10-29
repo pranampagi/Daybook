@@ -1,16 +1,21 @@
+import os
 from collections.abc import AsyncIterator
 
+from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
 
 settings = get_settings()
-engine = create_async_engine(
-    settings.database_url,
-    pool_pre_ping=True,
-    pool_size=settings.db_pool_size,
-    max_overflow=settings.db_max_overflow,
-)
+if os.environ.get("VERCEL") == "1":
+    engine = create_async_engine(settings.database_url, poolclass=pool.NullPool)
+else:
+    engine = create_async_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+    )
 session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 

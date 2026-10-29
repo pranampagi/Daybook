@@ -124,4 +124,6 @@ Each account chooses one currency at registration (USD, EUR, GBP, INR, CAD, or A
 
 ## Deploy
 
+For the configured Vercel frontend/backend projects, see **[the Vercel guide](docs/vercel.md)** for production URLs, environment settings, migrations, and redeployment.
+
 See **[the deployment guide](docs/deployment.md)** for HTTPS configuration, scaling, database backups, and production caveats. The included images can run on a Docker host or a container platform with managed PostgreSQL; the Nginx upstream discovery configuration is specifically for Docker Compose and must be adapted to other orchestrators.
